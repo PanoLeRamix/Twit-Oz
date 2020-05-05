@@ -1,0 +1,26 @@
+declare
+% Cree une liste de 1 a Upto
+fun {CreateList Upto}
+   fun {Create Upto Actual}
+      if Upto == Actual then Actual|nil
+      else Actual|{Create Upto Actual+1}
+      end
+   end
+in
+   {Create Upto 1}
+end
+{Browse {CreateList 30}}
+
+declare
+% Retourne la concaténation de deux strings
+fun {Concatenate String1 String2}
+   fun {Enumerate String}
+      case String
+      of H|nil then H|String2
+      [] H|T then H|{Enumerate}
+      [] nil then String2
+      end
+   end
+in
+   {Enumerate String1}
+end
