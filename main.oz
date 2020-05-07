@@ -77,42 +77,79 @@ define
        {Concatenate {Concatenate "tweets/part_" {Int.toString Number}} ".txt"}
     end
 
-%%% Ajoute au dictionnaire Dict les entités (mots) séparées par un espace de la ligne Ligne
-    proc {AddWordsToDic Dict Line}
-       WordToAdd Temp in
+%%% Ajoute au dictionnaire Dict les entités (mots) séparées par un espace de la ligne Line
+    proc {AddWordsToDict Dict Line}
+       WordToAdd GramCount in
        WordToAdd = {NewCell nil}
-       Temp = {NewCell nil}
+       GramCount = {NewCell nil}
 
        for Letter in Line
        do
 	  if Letter \= 32 then
 	     WordToAdd := {Append @WordToAdd Letter|nil}
 	  else
-	     Temp := {Dictionary.condGet Dict {String.toAtom @WordToAdd} 0}
-	     {Dictionary.put Dict {String.toAtom @WordToAdd} @Temp+1}
+	     GramCount := {Dictionary.condGet Dict {String.toAtom @WordToAdd} 0}
+	     {Dictionary.put Dict {String.toAtom @WordToAdd} @GramCount+1}
 	     WordToAdd := nil
 	  end
        end
-       Temp := {Dictionary.condGet Dict {String.toAtom @WordToAdd} 0}
-       {Dictionary.put Dict {String.toAtom @WordToAdd} @Temp+1}
-       WordToAdd := nil
+       GramCount := {Dictionary.condGet Dict {String.toAtom @WordToAdd} 0}
+       {Dictionary.put Dict {String.toAtom @WordToAdd} @GramCount+1}
+    end
+
+%%% Ajoute au dictionnaire Dict des sous-dictionnaires de type:
+%%% {"je" : {"suis" : 4, "mange" : 3}, "tu" : {"es" : 2}}
+%%% ce qui signifie que le mot "je" est suivi 4 fois par le mot "suis", etc.
+%%% dans la ligne Line
+    proc {Add1GramsToDict Dict Line}
+       FirstWord SecondWord SubDict GramCount in
+       FirstWord = {NewCell nil} % premier mot du gram
+       SecondWord = {NewCell nil} % second mot du gram
+       SubDict = {NewCell nil} % sous-dictionnaire de chaque mot
+       GramCount = {NewCell nil} % combien de fois le gram existe
+
+       for Letter in Line do
+	  if Letter \= 32 then
+	     SecondWord := {Append @SecondWord Letter|nil}
+	  else
+	     % on prend subdict et s'il n'existe pas, on le cree
+	    SubDict := {Dictionary.condGet Dict {String.toAtom @FirstWord} {Dictionary.new}}
+	     % on regarde cb de fois le gram existe deja
+	     GramCount := {Dictionary.condGet @SubDict {String.toAtom @SecondWord} 0}
+	     % on (re)met dans le subdico en incrementant de 1
+	     {Dictionary.put @SubDict {String.toAtom @SecondWord} @GramCount+1}
+             % on met le subdico dans le dico
+	     {Dictionary.put Dict {String.toAtom @FirstWord} @SubDict}
+	 
+	     FirstWord := @SecondWord
+	     SecondWord := nil
+	  end
+       end
+       
+       % il faut le faire encore une fois pcq la ligne finit pas par un espace
+       % oui c'est pas propre ahah
+       SubDict := {Dictionary.condGet Dict {String.toAtom @FirstWord} {Dictionary.new}}
+       GramCount := {Dictionary.condGet @SubDict {String.toAtom @SecondWord} 0}
+       {Dictionary.put @SubDict {String.toAtom @SecondWord} @GramCount+1}
+       {Dictionary.put Dict {String.toAtom @FirstWord} @SubDict}
     end
 
 %%% Essayons des trucs
-    {Browse 5}
-    % {Delay 6500} % pour avoir le temps d'activer la vision des strings sur le browser
+    % On crée le dictionnaire qui contient des données intéressantes
     WordsDict = {Dictionary.new}
-    for FileNumber in {CreateList 207}
+    for FileNumber in {CreateList 20}
     do
        {Browse FileNumber}
        for LineNumber in {CreateList 100}
        do
-	  % {Browse {GetLineNb {PartNumber FileNumber} LineNumber}}
-	  {AddWordsToDic WordsDict {GetLineNb {PartNumber FileNumber} LineNumber}}
+	  % {AddWordsToDict WordsDict {GetLineNb {PartNumber FileNumber} LineNumber}} % activer ceci pour conter le nombre d'occurrences d'un mot
+	  {Add1GramsToDict WordsDict {GetLineNb {PartNumber FileNumber} LineNumber}} % activer ceci pour conter les 1-grams
        end
     end
-    {Browse {Dictionary.condGet WordsDict {String.toAtom "the"} 0}}
-    {Browse {Reader.scan {New Reader.textfile init(name:{PartNumber 203})} 101}}
+
+    % {Browse {Dictionary.condGet WordsDict {String.toAtom "I"} 0}} % activer ceci dans le cas 1
+    ISubDict = {Dictionary.condGet WordsDict {String.toAtom "I"} 0} % activer ceci dans le cas 2
+    {Browse {Dictionary.condGet ISubDict {String.toAtom "am"} 0}} % activer ceci AUSSI dans le cas 2
     
 end
 
