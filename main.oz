@@ -34,16 +34,22 @@ define
         action:proc{$}{Application.exit 0} end % quit app gracefully on window closing
     )
     proc {Press}
-       Inserted in
-       Inserted = {Text1 getText(p(1 0) 'end' $)} % example using coordinates to get text
-       {Text2 set(1:Inserted)} % you can get/set text this way too
+       %% code du prof pas virer c'est pour se souvenir de comment faire
+       % Inserted in
+       % Inserted = {Text1 getText(p(1 0) 'end' $)} % example using coordinates to get text
+       % {Text2 set(1:Inserted)} % you can get/set text this way too
+       InsertedLine PredictedWord in
+       InsertedLine = {TakeSlashNOff {Text1 getText(p(1 0) 'end' $)}} % example using coordinates to get text
+       PredictedWord = {FindMostFrequent1Gram WordsDict {GetLastWord InsertedLine}} % WordsDict est défini tout en bas
+       {Text2 set(1:PredictedWord)} % you can get/set text this way too
     end
 
     % Build the layout from the description
     W={QTk.build Description}
     {W show}
 
-    {Text1 tk(insert 'end' {GetFirstLine "tweets/part_1.txt"})}
+    {Text1 tk(insert 'end' "Ne pas appuyer sur predict avant la fin de la preparation du dico!")}
+    % {Text1 tk(insert 'end' {GetFirstLine "tweets/part_1.txt"})}
     {Text1 bind(event:"<Control-s>" action:Press)} % You can also bind events
 
     {Show 'You can print in the terminal...'}
@@ -77,6 +83,36 @@ define
        {Concatenate {Concatenate "tweets/part_" {Int.toString Number}} ".txt"}
     end
 
+%%% Retourne le dernier mot de la ligne Line
+    fun {GetLastWord Line}
+       fun {GetIt Line Word}
+	  case Line
+	  of nil then Word
+	  [] Letter|T then
+	     if Letter \= 32 then
+		{GetIt T {Append Word Letter|nil}}
+	     else
+		{GetIt T nil}
+	     end
+	  end
+       end
+    in
+       {Browse {GetIt Line nil}}
+       {GetIt Line nil}
+    end
+
+%%% Retourne le même string mais sans aucun "\n"
+    fun {TakeSlashNOff String}
+       case String
+       of nil then
+	  String
+       [] 10|T then
+	  {TakeSlashNOff T}
+       else
+	  String.1|{TakeSlashNOff String.2}
+       end
+    end
+    
 %%% Ajoute au dictionnaire Dict les entités (mots) séparées par un espace de la ligne Line
     proc {AddWordsToDict Dict Line}
        WordToAdd GramCount in
@@ -134,6 +170,23 @@ define
        {Dictionary.put Dict {String.toAtom @FirstWord} @SubDict}
     end
 
+%%% Retourne le mot le plus frequent apres le mot Word, selon le dictionnaire Dict
+    fun {FindMostFrequent1Gram Dict Word}
+       {Browse Word}
+       SubDict MaxOccur in
+       SubDict = {Dictionary.condGet Dict {String.toAtom Word} {Dictionary.new}} % on lit le subDict du mot
+       MaxOccur = {NewCell [nil 0]} % ex. [apple 3] signifie que le mot Word est suivi 3 fois par apple
+       
+       for Key in {Dictionary.keys SubDict} do
+	  if {Dictionary.get SubDict Key} > @MaxOccur.2.1 then
+	     MaxOccur := {Append [Key] {Dictionary.get SubDict Key}|nil}
+	  end
+       end
+       
+       % return
+       {Atom.toString @MaxOccur.1}
+    end
+
 %%% Essayons des trucs
     % On crée le dictionnaire qui contient des données intéressantes
     WordsDict = {Dictionary.new}
@@ -148,8 +201,8 @@ define
     end
 
     % {Browse {Dictionary.condGet WordsDict {String.toAtom "I"} 0}} % activer ceci dans le cas 1
-    ISubDict = {Dictionary.condGet WordsDict {String.toAtom "I"} 0} % activer ceci dans le cas 2
-    {Browse {Dictionary.condGet ISubDict {String.toAtom "am"} 0}} % activer ceci AUSSI dans le cas 2
+    % ISubDict = {Dictionary.condGet WordsDict {String.toAtom "I"} 0} % activer ceci dans le cas 2
+    % {Browse {Dictionary.condGet ISubDict {String.toAtom "am"} 0}} % activer ceci AUSSI dans le cas 2
     
 end
 
