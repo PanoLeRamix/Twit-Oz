@@ -1,24 +1,26 @@
 functor
 import
     QTk at 'x-oz://system/wp/QTk.ozf'
-    System
+    % System
     Application
-    OS
+    % OS
     Browser
 
     Reader
 define
 %%% Easier macros for imported functions
     Browse = Browser.browse
-    Show = System.show
+    % Show = System.show
 
 %%% Read File
-    fun {GetFirstLine IN_NAME}
-        {Reader.scan {New Reader.textfile init(name:IN_NAME)} 1}
-    end
-
-    fun {GetLineNb IN_NAME LineNumber}
-       {Reader.scan {New Reader.textfile init(name:IN_NAME)} LineNumber}
+   fun {GetLineNb IN_NAME LineNumber}
+      Line in
+      Line = {Reader.scan {New Reader.textfile init(name:IN_NAME)} LineNumber}
+      if Line == none then
+	 nil
+      else
+	 Line
+      end
     end
 
 %%% GUI
@@ -38,22 +40,14 @@ define
        % Inserted in
        % Inserted = {Text1 getText(p(1 0) 'end' $)} % example using coordinates to get text
        % {Text2 set(1:Inserted)} % you can get/set text this way too
+       
+       {Wait FillThread}
+       
        InsertedLine PredictedWord in
        InsertedLine = {TakeSlashNOff {Text1 getText(p(1 0) 'end' $)}} % example using coordinates to get text
        PredictedWord = {FindMostFrequent1Gram WordsDict {GetLastWord InsertedLine}} % WordsDict est défini tout en bas
        {Text2 set(1:PredictedWord)} % you can get/set text this way too
     end
-
-    % Build the layout from the description
-    W={QTk.build Description}
-    {W show}
-
-    {Text1 tk(insert 'end' "Ne pas appuyer sur predict avant la fin de la preparation du dico!")}
-    % {Text1 tk(insert 'end' {GetFirstLine "tweets/part_1.txt"})}
-    {Text1 bind(event:"<Control-s>" action:Press)} % You can also bind events
-
-    {Show 'You can print in the terminal...'}
-    % {Browse '... or use the browser window'}
 
 %%% Cree une liste de 1 a Upto
     fun {CreateList Upto}
@@ -97,10 +91,9 @@ define
 	  end
        end
     in
-       {Browse {GetIt Line nil}}
        {GetIt Line nil}
     end
-
+       
 %%% Retourne le même string mais sans aucun "\n"
     fun {TakeSlashNOff String}
        case String
@@ -112,25 +105,36 @@ define
 	  String.1|{TakeSlashNOff String.2}
        end
     end
+
+%%% Retourne une liste des mots, dans l'ordre, de la ligne Line
+    fun {GetListOfWords Line}
+       LineSineN ToReturn WordToAdd in
+       LineSineN = {TakeSlashNOff Line}
+       ToReturn = {NewCell nil}
+       WordToAdd = {NewCell nil}
+       for Letter in LineSineN do
+	  if Letter == 32 then % " "
+	     ToReturn := {Append @ToReturn @WordToAdd|nil}
+	     WordToAdd := nil
+	  elseif Letter == 8217 then % apostrophe chelou
+	     WordToAdd := {Append @WordToAdd "'"|nil}
+	  else
+	     WordToAdd := {Append @WordToAdd Letter|nil}
+	  end
+       end
+       @ToReturn
+    end
+    
     
 %%% Ajoute au dictionnaire Dict les entités (mots) séparées par un espace de la ligne Line
     proc {AddWordsToDict Dict Line}
-       WordToAdd GramCount in
-       WordToAdd = {NewCell nil}
+       GramCount in
        GramCount = {NewCell nil}
 
-       for Letter in Line
-       do
-	  if Letter \= 32 then
-	     WordToAdd := {Append @WordToAdd Letter|nil}
-	  else
-	     GramCount := {Dictionary.condGet Dict {String.toAtom @WordToAdd} 0}
-	     {Dictionary.put Dict {String.toAtom @WordToAdd} @GramCount+1}
-	     WordToAdd := nil
-	  end
+       for Word in {GetListOfWords Line} do
+	  GramCount := {Dictionary.condGet Dict {String.toAtom Word} 0}
+	  {Dictionary.put Dict {String.toAtom Word} @GramCount+1}
        end
-       GramCount := {Dictionary.condGet Dict {String.toAtom @WordToAdd} 0}
-       {Dictionary.put Dict {String.toAtom @WordToAdd} @GramCount+1}
     end
 
 %%% Ajoute au dictionnaire Dict des sous-dictionnaires de type:
@@ -138,41 +142,27 @@ define
 %%% ce qui signifie que le mot "je" est suivi 4 fois par le mot "suis", etc.
 %%% dans la ligne Line
     proc {Add1GramsToDict Dict Line}
-       FirstWord SecondWord SubDict GramCount in
-       FirstWord = {NewCell nil} % premier mot du gram
-       SecondWord = {NewCell nil} % second mot du gram
+       PrevWord SubDict GramCount in
+       PrevWord = {NewCell nil} % premier mot du gram
        SubDict = {NewCell nil} % sous-dictionnaire de chaque mot
        GramCount = {NewCell nil} % combien de fois le gram existe
 
-       for Letter in Line do
-	  if Letter \= 32 then
-	     SecondWord := {Append @SecondWord Letter|nil}
-	  else
-	     % on prend subdict et s'il n'existe pas, on le cree
-	    SubDict := {Dictionary.condGet Dict {String.toAtom @FirstWord} {Dictionary.new}}
-	     % on regarde cb de fois le gram existe deja
-	     GramCount := {Dictionary.condGet @SubDict {String.toAtom @SecondWord} 0}
-	     % on (re)met dans le subdico en incrementant de 1
-	     {Dictionary.put @SubDict {String.toAtom @SecondWord} @GramCount+1}
-             % on met le subdico dans le dico
-	     {Dictionary.put Dict {String.toAtom @FirstWord} @SubDict}
-	 
-	     FirstWord := @SecondWord
-	     SecondWord := nil
-	  end
+       for Word in {GetListOfWords Line} do % second mot du gram
+	  % on prend subdict et s'il n'existe pas, on le cree
+	  SubDict := {Dictionary.condGet Dict {String.toAtom @PrevWord} {Dictionary.new}}
+	  % on regarde cb de fois le gram existe deja
+	  GramCount := {Dictionary.condGet @SubDict {String.toAtom Word} 0}
+	  % on (re)met dans le subdico en incrementant de 1
+	  {Dictionary.put @SubDict {String.toAtom Word} @GramCount+1}
+	  % on met le subdico dans le dico
+	  {Dictionary.put Dict {String.toAtom @PrevWord} @SubDict}
+
+	  PrevWord := Word
        end
-       
-       % il faut le faire encore une fois pcq la ligne finit pas par un espace
-       % oui c'est pas propre ahah
-       SubDict := {Dictionary.condGet Dict {String.toAtom @FirstWord} {Dictionary.new}}
-       GramCount := {Dictionary.condGet @SubDict {String.toAtom @SecondWord} 0}
-       {Dictionary.put @SubDict {String.toAtom @SecondWord} @GramCount+1}
-       {Dictionary.put Dict {String.toAtom @FirstWord} @SubDict}
     end
 
 %%% Retourne le mot le plus frequent apres le mot Word, selon le dictionnaire Dict
     fun {FindMostFrequent1Gram Dict Word}
-       {Browse Word}
        SubDict MaxOccur in
        SubDict = {Dictionary.condGet Dict {String.toAtom Word} {Dictionary.new}} % on lit le subDict du mot
        MaxOccur = {NewCell [nil 0]} % ex. [apple 3] signifie que le mot Word est suivi 3 fois par apple
@@ -187,22 +177,52 @@ define
        {Atom.toString @MaxOccur.1}
     end
 
-%%% Essayons des trucs
-    % On crée le dictionnaire qui contient des données intéressantes
-    WordsDict = {Dictionary.new}
-    for FileNumber in {CreateList 20}
-    do
-       {Browse FileNumber}
-       for LineNumber in {CreateList 100}
-       do
-	  % {AddWordsToDict WordsDict {GetLineNb {PartNumber FileNumber} LineNumber}} % activer ceci pour conter le nombre d'occurrences d'un mot
-	  {Add1GramsToDict WordsDict {GetLineNb {PartNumber FileNumber} LineNumber}} % activer ceci pour conter les 1-grams
+%%% Lit tous les tweets et remplit le dictionnaire
+%%% Dict est le dictionnaire à remplir
+%%% NumberOfFiles est le nombre de fichiers à lire
+%%% NumberOfLines le nombre de lignes par fichier à prendre en compte
+%%% Ngram est la qualité du dictionnaire qu'on désire (0-gram, 1-gram, 2-gram)
+    proc {FillDictionary Dict NumberOfFiles NumberOfLines Ngram}
+       if Ngram == 0 then
+	  for FileNumber in {CreateList NumberOfFiles} do
+	     {Browse FileNumber}
+	     for LineNumber in {CreateList NumberOfLines} do
+		{AddWordsToDict WordsDict {GetLineNb {PartNumber FileNumber} LineNumber}}
+	     end
+	  end
+       else
+	  for FileNumber in {CreateList NumberOfFiles} do
+	     {Browse FileNumber}
+	     for LineNumber in {CreateList NumberOfLines} do
+		{Add1GramsToDict WordsDict {GetLineNb {PartNumber FileNumber} LineNumber}}
+	     end
+	  end
        end
+       FillThread = unit
     end
+    
 
-    % {Browse {Dictionary.condGet WordsDict {String.toAtom "I"} 0}} % activer ceci dans le cas 1
-    % ISubDict = {Dictionary.condGet WordsDict {String.toAtom "I"} 0} % activer ceci dans le cas 2
-    % {Browse {Dictionary.condGet ISubDict {String.toAtom "am"} 0}} % activer ceci AUSSI dans le cas 2
+%%% Et voici le code qui tourne
+    % Build the layout from the description
+    % jsp ce que c'est ahah
+    W={QTk.build Description}
+    {W show}
+
+    % On cree la fenetre du haut (en blanc)
+    {Text1 tk(insert 'end' "Chargement... Veuillez patienter.")}
+    {Text1 bind(event:"<Control-s>" action:Press)} % You can also bind events
+    
+    % On cree le dictionnaire qui contient des données intéressantes
+    WordsDict = {Dictionary.new}
+    FillThread
+    thread {FillDictionary WordsDict 20 100 1} end
+    {Wait FillThread}
+
+    % C'est parti !
+    {Text1 set(1:"Chargement terminé ! Effacez ce texte et écrivez le vôtre à la place.")} % you can get/set text this way too
+    
+    % {Show 'You can print in the terminal...'} % pour ça faut activer 2 trucs (envoie-moi un msg si tu veux le faire)
+    % {Browse '... or use the browser window'}
     
 end
 
