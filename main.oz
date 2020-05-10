@@ -49,15 +49,15 @@ define
        {Text2 set(1:PredictedWord)} % you can get/set text this way too
     end
 
-%%% Cree une liste de 1 a Upto
-    fun {CreateList Upto}
+%%% Cree une liste de From a Upto
+    fun {CreateList From Upto}
        fun {Create Upto Actual}
 	  if Upto == Actual then Actual|nil
 	  else Actual|{Create Upto Actual+1}
 	  end
        end
     in
-       {Create Upto 1}
+       {Create Upto From}
     end
 
 %%% Retourne la concatenation de deux strings
@@ -179,21 +179,21 @@ define
 
 %%% Lit tous les tweets et remplit le dictionnaire
 %%% Dict est le dictionnaire à remplir
-%%% NumberOfFiles est le nombre de fichiers à lire
-%%% NumberOfLines le nombre de lignes par fichier à prendre en compte
+%%% Lit les fichiers du numéro FromFile au numéro ToFile
+%%% Lit les lignes de la ligne FromLine à la lgien ToLine
 %%% Ngram est la qualité du dictionnaire qu'on désire (0-gram, 1-gram, 2-gram)
-    proc {FillDictionary Dict NumberOfFiles NumberOfLines Ngram}
+    proc {FillDictionary Dict FromFile ToFile FromLine ToLine Ngram}
        if Ngram == 0 then
-	  for FileNumber in {CreateList NumberOfFiles} do
+	  for FileNumber in {CreateList FromFile ToFile} do
 	     {Browse FileNumber}
-	     for LineNumber in {CreateList NumberOfLines} do
+	     for LineNumber in {CreateList FromLine ToLine} do
 		{AddWordsToDict WordsDict {GetLineNb {PartNumber FileNumber} LineNumber}}
 	     end
 	  end
        else
-	  for FileNumber in {CreateList NumberOfFiles} do
+	  for FileNumber in {CreateList FromFile ToFile} do
 	     {Browse FileNumber}
-	     for LineNumber in {CreateList NumberOfLines} do
+	     for LineNumber in {CreateList FromLine ToLine} do
 		{Add1GramsToDict WordsDict {GetLineNb {PartNumber FileNumber} LineNumber}}
 	     end
 	  end
@@ -215,7 +215,7 @@ define
     % On cree le dictionnaire qui contient des données intéressantes
     WordsDict = {Dictionary.new}
     FillThread
-    thread {FillDictionary WordsDict 20 100 1} end
+    thread {FillDictionary WordsDict 200 208 1 100 1} end
     {Wait FillThread}
 
     % C'est parti !
