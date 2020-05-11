@@ -41,11 +41,11 @@ define
        % Inserted = {Text1 getText(p(1 0) 'end' $)} % example using coordinates to get text
        % {Text2 set(1:Inserted)} % you can get/set text this way too
        
-       {Wait ThreadOver}
+       {Wait Add2GramsOver}
        
        InsertedLine PredictedWord in
        InsertedLine = {TakeSlashNOff {Text1 getText(p(1 0) 'end' $)}} % example using coordinates to get text
-       PredictedWord = {FindMostFrequent1Gram WordsDict {GetLastWord InsertedLine}} % WordsDict est défini tout en bas
+       PredictedWord = {FindMostFrequent2Gram WordsDict {GetLastTwoWords InsertedLine}} % WordsDict est défini tout en bas
        {Text2 set(1:PredictedWord)} % you can get/set text this way too
     end
 
@@ -54,21 +54,21 @@ define
        {Append {Append "tweets/part_" {Int.toString Number}} ".txt"}
     end
 
-%%% Retourne le dernier mot de la ligne Line
-    fun {GetLastWord Line}
-       fun {GetIt Line Word}
+%%% Retourne les deux derniers mots, sous forme de liste, de la ligne Line
+    fun {GetLastTwoWords Line}
+       fun {GetThem Line AnteUltWord UltWord}
 	  case Line
-	  of nil then Word
+	  of nil then [AnteUltWord UltWord]
 	  [] Letter|T then
 	     if Letter \= 32 then
-		{GetIt T {Append Word Letter|nil}}
+		{GetThem T AnteUltWord {Append UltWord Letter|nil}}
 	     else
-		{GetIt T nil}
+		{GetThem T UltWord nil}
 	     end
 	  end
        end
     in
-       {GetIt Line nil}
+       {GetThem Line nil nil}
     end
        
 %%% Retourne le même string mais sans aucun "\n"
@@ -83,18 +83,21 @@ define
        end
     end
 
-%%% Retourne le mot le plus frequent apres le mot Word, selon le dictionnaire Dict
-    fun {FindMostFrequent1Gram Dict Word}
-       SubDict MaxOccur in
-       SubDict = {Dictionary.condGet Dict {String.toAtom Word} {Dictionary.new}} % on lit le subDict du mot
-       MaxOccur = {NewCell [nil 0]} % ex. [apple 3] signifie que le mot Word est suivi 3 fois par apple
-       
-       for Key in {Dictionary.keys SubDict} do
-	  if {Dictionary.get SubDict Key} > @MaxOccur.2.1 then
-	     MaxOccur := {Append [Key] {Dictionary.get SubDict Key}|nil}
+%%% Retourne le mot le plus frequent apres la suite de mots Words, selon le dictionnaire Dict
+    fun {FindMostFrequent2Gram Dict Words}
+       Word1 Word2 SubDict SubSubDict MaxOccur in
+       Word1 = Words.1
+       Word2 = Words.2.1
+       SubDict = {Dictionary.condGet Dict {String.toAtom Word1} {Dictionary.new}} % on lit le subDict du mot 1
+       SubSubDict = {Dictionary.condGet SubDict {String.toAtom Word2} {Dictionary.new}} % on lit le subsubDict du mot 1, suivi du mot 2
+       MaxOccur = {NewCell [nil 0]} % ex. [apple 3] signifie que les mots Word 1 et Word 2 sont suivis 3 fois par apple
+
+       for Key in {Dictionary.keys SubSubDict} do
+	  if {Dictionary.get SubSubDict Key} > @MaxOccur.2.1 then
+	     MaxOccur := {Append [Key] {Dictionary.get SubSubDict Key}|nil}
 	  end
        end
-       
+
        % return
        {Atom.toString @MaxOccur.1}
     end
@@ -142,8 +145,12 @@ define
 	  if Letter == 32 then % " "
 	     ToReturn := {Append @ToReturn @WordToAdd|nil}
 	     WordToAdd := nil
-	  elseif Letter == 8217 then % apostrophe chelou
-	     WordToAdd := {Append @WordToAdd "'"|nil}
+	  elseif Letter == 46 orelse Letter == 59 orelse Letter == 33 orelse Letter == 63 then % ".", ";", "!", "?"
+	     skip
+	  elseif Letter == 146 orelse Letter == 222 then % fonctionne pas
+	     skip
+	  elseif 64 < Letter andthen Letter < 90 then % lettre majuscule
+	     WordToAdd := {Append @WordToAdd Letter+32|nil}
 	  else
 	     WordToAdd := {Append @WordToAdd Letter|nil}
 	  end
@@ -157,36 +164,37 @@ define
        end
     end
 
-%%% Ajoute au dictionnaire Dict des sous-dictionnaires de type:
-%%% {"je" : {"suis" : 4, "mange" : 3}, "tu" : {"es" : 2}}
-%%% ce qui signifie que le mot "je" est suivi 4 fois par le mot "suis", etc.
-%%% dans la ligne Line
-    proc {Add1GramsToDict Dict Stream}
-       PrevWord SubDict GramCount in
-       PrevWord = {NewCell nil} % premier mot du gram
+%%% Ajoute au dictionnaire Dict des sous-dictionnaires de façon que Dict ressemble à :
+%%% {"je" : {"suis" : {grand : 4, petit : 3}, "mange" : {des : 1, une : 3}}, "tu" : {"es" : {grand : 2}}}
+%%% ce qui signifie que la suite de mots "je suis" est suivi 4 fois par le mot "grand", etc.
+%%% depuis le stream Stream
+    proc {Add2GramsToDict Dict Stream}
+       AnteUltWord UltWord SubDict SubSubDict GramCount in
+       AnteUltWord = {NewCell nil} % premier mot du gram
+       UltWord = {NewCell nil} % deuxieme mot du gram
        SubDict = {NewCell nil} % sous-dictionnaire de chaque mot
+       SubSubDict = {NewCell nil}
        GramCount = {NewCell nil} % combien de fois le gram existe
 
-       for Word in Stream.1 do % second mot du gram
-	  % on prend subdict et s'il n'existe pas, on le cree
-	  SubDict := {Dictionary.condGet Dict {String.toAtom @PrevWord} {Dictionary.new}}
-	  % on regarde cb de fois le gram existe deja
-	  GramCount := {Dictionary.condGet @SubDict {String.toAtom Word} 0}
-	  % on (re)met dans le subdico en incrementant de 1
-	  {Dictionary.put @SubDict {String.toAtom Word} @GramCount+1}
-	  % on met le subdico dans le dico
-	  {Dictionary.put Dict {String.toAtom @PrevWord} @SubDict}
+       for Word in Stream.1 do % troisieme mot du gram
+	  SubDict := {Dictionary.condGet Dict {String.toAtom @AnteUltWord} {Dictionary.new}}
+	  SubSubDict := {Dictionary.condGet @SubDict {String.toAtom @UltWord} {Dictionary.new}}
+	  GramCount := {Dictionary.condGet @SubSubDict {String.toAtom Word} 0}
+	  {Dictionary.put @SubSubDict {String.toAtom Word} @GramCount+1}
+	  {Dictionary.put @SubDict {String.toAtom @UltWord} @SubSubDict}
+	  {Dictionary.put Dict {String.toAtom @AnteUltWord} @SubDict}
 
-	  PrevWord := Word
+	  AnteUltWord := @UltWord
+	  UltWord := Word
        end
 
        if Stream.2 == over then
-	  {Show add1gramsover}
-	  ThreadOver = unit
+	  {Show add2gramsover}
+	  Add2GramsOver = unit
        else
-	  {Add1GramsToDict Dict Stream.2}
+	  {Add2GramsToDict Dict Stream.2}
        end
-    end
+    end 
        
 %%% Et voici le code qui tourne
     % Build the layout from the description
@@ -208,29 +216,30 @@ define
     thread ReadingStream = {ReadFiles 1 208 1 100} end
     %thread ReadingStream2 = {ReadFiles 71 140 1 100} end
     %thread ReadingStream3 = {ReadFiles 141 208 1 100} end
-    {Wait ReadFilesOver}
-    Time2 = {Time.time}
-    {Show Time2-Time1}
-    % thread {Disp ReadingStream} end
+    %{Wait ReadFilesOver}
+    %Time2 = {Time.time}
+    %{Show Time2-Time1}
     
     % Ici les threads de parsing (j'ai suppose que c'etait ca ahah)
     GetListOver
     SeparatingStream
     thread SeparatingStream = {GetListOfWords ReadingStream} end
     % thread {Disp SeparatingStream} end
-    {Wait GetListOver}
-    Time3 = {Time.time}
-    {Show Time3-Time2}
+    %{Wait GetListOver}
+    %Time3 = {Time.time}
+    %{Show Time3-Time2}
 
     % Et ici les threads d'écriture (guess que c'est ceux qui ecrivent dans le dico?)
     WordsDict = {Dictionary.new}
-    ThreadOver
-    thread {Add1GramsToDict WordsDict SeparatingStream} end
-    {Wait ThreadOver}
+    Add2GramsOver
+    thread {Add2GramsToDict WordsDict SeparatingStream} end
+    {Wait Add2GramsOver}
     Time4 = {Time.time}
-    {Show Time4-Time3}
+    %{Show Time4-Time3}
+    
     {Show over}
-
+    {Show Time4-Time1}
+    
     % C'est parti !
     {Text1 set(1:"Chargement terminé ! Effacez ce texte et écrivez le vôtre à la place.")} % you can get/set text this way too   
 end
