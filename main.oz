@@ -122,9 +122,8 @@ define
 	     WordToAdd := {Append @WordToAdd Letter|nil}
 	  end
        end
-       @ToReturn
+       {Append @ToReturn @WordToAdd|nil}
     end
-    
     
 %%% Ajoute au dictionnaire Dict les entités (mots) séparées par un espace de la ligne Line
     proc {AddWordsToDict Dict Line}
@@ -177,10 +176,8 @@ define
        {Atom.toString @MaxOccur.1}
     end
 
-%%% Lit tous les tweets et remplit le dictionnaire
+%%% Remplit le dictionnaire
 %%% Dict est le dictionnaire à remplir
-%%% Lit les fichiers du numéro FromFile au numéro ToFile
-%%% Lit les lignes de la ligne FromLine à la lgien ToLine
 %%% Ngram est la qualité du dictionnaire qu'on désire (0-gram, 1-gram, 2-gram)
     proc {FillDictionary Dict FromFile ToFile FromLine ToLine Ngram}
        if Ngram == 0 then
@@ -200,8 +197,77 @@ define
        end
        FillThread = unit
     end
-    
 
+%%%%%% PARTIE OU LES FONCTIONS FONCTIONNENT AVEC DES STREAMS (THREADS) %%%%%
+
+%%% Lit les fichiers du numéro FromFile au numéro ToFile
+%%% Lit les lignes de la ligne FromLine à la lgien ToLine
+%%% Et les retourne sous forme de liste ( [[[l1f1][l2f1][l3f1]...][[l1f2][l2f2]...]...] )
+    fun {BadReadFiles FromFile ToFile FromLine ToLine}
+       LinesRead in
+       LinesRead = {NewCell nil}
+       for LineNumber in {CreateList FromLine ToLine} do
+	  LinesRead := {Append @LinesRead [{GetLineNb {PartNumber FromFile} LineNumber}]}
+       end
+       if FromFile == ToFile then
+	  @LinesRead|over
+       else
+	  @LinesRead|{BadReadFiles FromFile+1 ToFile FromLine ToLine}
+       end
+    end
+
+%%% Lit les fichiers du numéro FromFile au numéro ToFile
+%%% Lit les lignes de la ligne FromLine à la ligne ToLine
+%%% Et retourne les lignes, une à une, sous forme de stream, terminé par over
+    fun {ReadFiles FromFile ToFile FromLine ToLine}
+       fun {ReadIt CurrentFile CurrentLine}
+	  if CurrentLine == ToLine then
+	     if CurrentFile == ToFile then
+		{GetLineNb {PartNumber CurrentFile} CurrentLine}|over
+	     else
+		{GetLineNb {PartNumber CurrentFile} CurrentLine}|{ReadIt CurrentFile+1 FromLine}
+	     end
+	  else
+	     {GetLineNb {PartNumber CurrentFile} CurrentLine}|{ReadIt CurrentFile CurrentLine+1}
+	  end
+       end
+    in
+       {ReadIt FromFile FromLine}
+    end
+
+%%% Browse un stream
+    proc {Disp S}
+       case S
+       of X|over then {Browse X}
+       [] X|S2 then
+	  {Browse X}
+	  {Disp S2}
+       end
+    end
+
+%%% Retourne un stream de liste des mots, dans l'ordre, de la ligne Line, termine par over
+    fun {TGetListOfWords Stream}
+       LineSineN ToReturn WordToAdd in
+       LineSineN = {TakeSlashNOff Stream.1}
+       ToReturn = {NewCell nil}
+       WordToAdd = {NewCell nil}
+       for Letter in LineSineN do
+	  if Letter == 32 then % " "
+	     ToReturn := {Append @ToReturn @WordToAdd|nil}
+	     WordToAdd := nil
+	  elseif Letter == 8217 then % apostrophe chelou
+	     WordToAdd := {Append @WordToAdd "'"|nil}
+	  else
+	     WordToAdd := {Append @WordToAdd Letter|nil}
+	  end
+       end
+       if Stream.2 == over then
+	  {Append @ToReturn @WordToAdd|nil}|over
+       else
+	  {Append @ToReturn @WordToAdd|nil}|{TGetListOfWords Stream.2}
+       end
+    end
+       
 %%% Et voici le code qui tourne
     % Build the layout from the description
     % jsp ce que c'est ahah
@@ -213,9 +279,23 @@ define
     {Text1 bind(event:"<Control-s>" action:Press)} % You can also bind events
     
     % On cree le dictionnaire qui contient des données intéressantes
+    % Ici il va falloir lancer les threads de lecture
+    ReadingStream
+    thread ReadingStream = {ReadFiles 1 25 1 5} end
+    % thread {Disp ReadingStream} end
+    
+    % Ici les threads de parsing (j'ai suppose que c'etait ca ahah)
+    SeparatingStream
+    thread SeparatingStream = {TGetListOfWords ReadingStream} end
+    % thread {Disp SeparatingStream} end
+
+    % Et ici les threads d'écriture (guess que c'est ceux qui ecrivent dans le dico?)
+    % pas encore fait
+
+    %%% code fonctionnel mais sans thread
     WordsDict = {Dictionary.new}
     FillThread
-    thread {FillDictionary WordsDict 200 208 1 100 1} end
+    thread {FillDictionary WordsDict 207 207 1 100 1} end
     {Wait FillThread}
 
     % C'est parti !

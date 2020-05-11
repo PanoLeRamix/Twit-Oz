@@ -30,3 +30,32 @@ SubDict = {Dictionary.condGet A {String.toAtom "los"} 0}
 {Browse ""} % [8220]
 {Browse ""} % [8221]
 {Browse ""} % [8217]
+
+declare
+proc {Disp S}
+   case S
+   of X|nil then {Browse X}
+   [] X|S2 then
+      {Browse X}
+      {Disp S2}
+   end
+end
+
+fun {Prod N}
+   {Delay 1000}
+   if N == 10 then N|nil
+   else N|{Prod N+1}
+   end
+end
+
+fun {Trans S}
+   case S
+   of X|nil then X*X|nil
+   [] X|S2 then X*X|{Trans S2}
+   end
+end
+
+declare S1 S2
+thread S1 = {Prod 1} end
+thread S2 = {Trans S1} end
+thread {Disp S2} end
