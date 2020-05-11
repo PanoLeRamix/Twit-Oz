@@ -49,17 +49,6 @@ define
        {Text2 set(1:PredictedWord)} % you can get/set text this way too
     end
 
-%%% Cree une liste de From a Upto
-    fun {CreateList From Upto}
-       fun {Create Upto Actual}
-	  if Upto == Actual then Actual|nil
-	  else Actual|{Create Upto Actual+1}
-	  end
-       end
-    in
-       {Create Upto From}
-    end
-
 %%% Retourne la concatenation de "tweets/part_", de Number et de ".txt"
     fun {PartNumber Number}
        {Append {Append "tweets/part_" {Int.toString Number}} ".txt"}
@@ -111,23 +100,16 @@ define
     end
 
 %%%%%% PARTIE OU LES FONCTIONS FONCTIONNENT AVEC DES STREAMS (THREADS) %%%%%
-
-%%% Lit les fichiers du numéro FromFile au numéro ToFile
-%%% Lit les lignes de la ligne FromLine à la lgien ToLine
-%%% Et les retourne sous forme de liste ( [[[l1f1][l2f1][l3f1]...][[l1f2][l2f2]...]...] )
-    fun {BadReadFiles FromFile ToFile FromLine ToLine}
-       LinesRead in
-       LinesRead = {NewCell nil}
-       for LineNumber in {CreateList FromLine ToLine} do
-	  LinesRead := {Append @LinesRead [{GetLineNb {PartNumber FromFile} LineNumber}]}
-       end
-       if FromFile == ToFile then
-	  @LinesRead|over
-       else
-	  @LinesRead|{BadReadFiles FromFile+1 ToFile FromLine ToLine}
+%%% Browse un stream
+    proc {Disp S}
+       case S
+       of X|over then {Browse X}
+       [] X|S2 then
+	  {Browse X}
+	  {Disp S2}
        end
     end
-
+    
 %%% Lit les fichiers du numéro FromFile au numéro ToFile
 %%% Lit les lignes de la ligne FromLine à la ligne ToLine
 %%% Et retourne les lignes, une à une, sous forme de stream, terminé par over
@@ -150,18 +132,8 @@ define
        {ReadIt FromFile FromLine}
     end
 
-%%% Browse un stream
-    proc {Disp S}
-       case S
-       of X|over then {Browse X}
-       [] X|S2 then
-	  {Browse X}
-	  {Disp S2}
-       end
-    end
-
 %%% Retourne un stream de liste des mots, dans l'ordre, de la ligne Line, termine par over
-    fun {TGetListOfWords Stream}
+    fun {GetListOfWords Stream}
        LineSineN ToReturn WordToAdd in
        LineSineN = {TakeSlashNOff Stream.1}
        ToReturn = {NewCell nil}
@@ -181,7 +153,7 @@ define
 	  {Show getlistover}
 	  {Append @ToReturn @WordToAdd|nil}|over
        else
-	  {Append @ToReturn @WordToAdd|nil}|{TGetListOfWords Stream.2}
+	  {Append @ToReturn @WordToAdd|nil}|{GetListOfWords Stream.2}
        end
     end
 
@@ -189,7 +161,7 @@ define
 %%% {"je" : {"suis" : 4, "mange" : 3}, "tu" : {"es" : 2}}
 %%% ce qui signifie que le mot "je" est suivi 4 fois par le mot "suis", etc.
 %%% dans la ligne Line
-    proc {TAdd1GramsToDict Dict Stream}
+    proc {Add1GramsToDict Dict Stream}
        PrevWord SubDict GramCount in
        PrevWord = {NewCell nil} % premier mot du gram
        SubDict = {NewCell nil} % sous-dictionnaire de chaque mot
@@ -212,7 +184,7 @@ define
 	  {Show add1gramsover}
 	  ThreadOver = unit
        else
-	  {TAdd1GramsToDict Dict Stream.2}
+	  {Add1GramsToDict Dict Stream.2}
        end
     end
        
@@ -230,8 +202,12 @@ define
     % Ici il va falloir lancer les threads de lecture
     ReadFilesOver
     ReadingStream
+    %ReadingStream2
+    %ReadingStream3
     Time1 = {Time.time}
-    thread ReadingStream = {ReadFiles 1 20 1 100} end
+    thread ReadingStream = {ReadFiles 1 208 1 100} end
+    %thread ReadingStream2 = {ReadFiles 71 140 1 100} end
+    %thread ReadingStream3 = {ReadFiles 141 208 1 100} end
     {Wait ReadFilesOver}
     Time2 = {Time.time}
     {Show Time2-Time1}
@@ -240,7 +216,7 @@ define
     % Ici les threads de parsing (j'ai suppose que c'etait ca ahah)
     GetListOver
     SeparatingStream
-    thread SeparatingStream = {TGetListOfWords ReadingStream} end
+    thread SeparatingStream = {GetListOfWords ReadingStream} end
     % thread {Disp SeparatingStream} end
     {Wait GetListOver}
     Time3 = {Time.time}
@@ -249,19 +225,13 @@ define
     % Et ici les threads d'écriture (guess que c'est ceux qui ecrivent dans le dico?)
     WordsDict = {Dictionary.new}
     ThreadOver
-    thread {TAdd1GramsToDict WordsDict SeparatingStream} end
+    thread {Add1GramsToDict WordsDict SeparatingStream} end
     {Wait ThreadOver}
     Time4 = {Time.time}
     {Show Time4-Time3}
     {Show over}
 
-    %%% code fonctionnel mais sans thread
-
     % C'est parti !
-    {Text1 set(1:"Chargement terminé ! Effacez ce texte et écrivez le vôtre à la place.")} % you can get/set text this way too
-    
-    % {Show 'You can print in the terminal...'} % pour ça faut activer 2 trucs (envoie-moi un msg si tu veux le faire)
-    % {Browse '... or use the browser window'}
-    
+    {Text1 set(1:"Chargement terminé ! Effacez ce texte et écrivez le vôtre à la place.")} % you can get/set text this way too   
 end
 
