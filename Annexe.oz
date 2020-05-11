@@ -59,3 +59,8 @@ declare S1 S2
 thread S1 = {Prod 1} end
 thread S2 = {Trans S1} end
 thread {Disp S2} end
+
+declare
+A = {Time.time}
+{Delay 4567}
+{Browse {Time.time} - A}
