@@ -36,17 +36,17 @@ define
         action:proc{$}{Application.exit 0} end % quit app gracefully on window closing
     )
     proc {Press}
-       %% code du prof pas virer c'est pour se souvenir de comment faire
-       % Inserted in
-       % Inserted = {Text1 getText(p(1 0) 'end' $)} % example using coordinates to get text
-       % {Text2 set(1:Inserted)} % you can get/set text this way too
-       
        {Wait Add2GramsOver}
        
        InsertedLine PredictedWord in
-       InsertedLine = {TakeSlashNOff {Text1 getText(p(1 0) 'end' $)}} % example using coordinates to get text
-       PredictedWord = {FindMostFrequent2Gram WordsDict {GetLastTwoWords InsertedLine}} % WordsDict est défini tout en bas
-       {Text2 set(1:PredictedWord)} % you can get/set text this way too
+       InsertedLine = {Format {Text1 getText(p(1 0) 'end' $)}}
+       PredictedWord = {FindMostFrequent2Gram WordsDict {GetLastTwoWords InsertedLine}}
+       
+       if PredictedWord == nil then
+	  {Text2 set(1:"We couldn't find any prediction. Please try again with other words.")}
+       else
+	  {Text2 set(1:PredictedWord)} 
+       end
     end
 
 %%% Retourne la concatenation de "tweets/part_", de Number et de ".txt"
@@ -63,7 +63,11 @@ define
 	     if Letter \= 32 then
 		{GetThem T AnteUltWord {Append UltWord Letter|nil}}
 	     else
-		{GetThem T UltWord nil}
+		if T \= nil then
+		   {GetThem T UltWord nil}
+		else
+		   [AnteUltWord UltWord]
+		end
 	     end
 	  end
        end
@@ -71,15 +75,17 @@ define
        {GetThem Line nil nil}
     end
        
-%%% Retourne le même string mais sans aucun "\n"
-    fun {TakeSlashNOff String}
+%%% Retourne le même string mais sans aucun "\n" et sans double espace
+    fun {Format String}
        case String
        of nil then
 	  String
        [] 10|T then
-	  {TakeSlashNOff T}
+	  {Format T}
+       [] 32|32|T then
+	  {Format 32|T}
        else
-	  String.1|{TakeSlashNOff String.2}
+	  String.1|{Format String.2}
        end
     end
 
@@ -115,20 +121,22 @@ define
     
 %%% Lit les fichiers du numéro FromFile au numéro ToFile
 %%% Lit les lignes de la ligne FromLine à la ligne ToLine
-%%% Et retourne les lignes, une à une, sous forme de stream, terminé par over
-    fun {ReadFiles FromFile ToFile FromLine ToLine}
-       fun {ReadIt CurrentFile CurrentLine}
+%%% Et ajoute les lignes, une à une, au port Port
+%%% Envoie over quand il a terminé
+    proc {ReadFiles Port FromFile ToFile FromLine ToLine}
+       proc {ReadIt CurrentFile CurrentLine}
+	  {Send Port {GetLineNb {PartNumber CurrentFile} CurrentLine}}
 	  if CurrentLine == ToLine then
 	     if CurrentFile == ToFile then
 		ReadFilesOver = unit
 		{Show readfilesover}
-		{GetLineNb {PartNumber CurrentFile} CurrentLine}|over
+		{Send Port over}
 	     else
 		{Show CurrentFile}
-		{GetLineNb {PartNumber CurrentFile} CurrentLine}|{ReadIt CurrentFile+1 FromLine}
+		{ReadIt CurrentFile+1 FromLine}
 	     end
 	  else
-	     {GetLineNb {PartNumber CurrentFile} CurrentLine}|{ReadIt CurrentFile CurrentLine+1}
+	     {ReadIt CurrentFile CurrentLine+1}
 	  end
        end
     in
@@ -138,7 +146,7 @@ define
 %%% Retourne un stream de liste des mots, dans l'ordre, de la ligne Line, termine par over
     fun {GetListOfWords Stream}
        LineSineN ToReturn WordToAdd in
-       LineSineN = {TakeSlashNOff Stream.1}
+       LineSineN = {Format Stream.1}
        ToReturn = {NewCell nil}
        WordToAdd = {NewCell nil}
        for Letter in LineSineN do
@@ -155,7 +163,7 @@ define
 	     WordToAdd := {Append @WordToAdd Letter|nil}
 	  end
        end
-       if Stream.2 == over then
+       if Stream.2.1 == over then
 	  GetListOver = unit
 	  {Show getlistover}
 	  {Append @ToReturn @WordToAdd|nil}|over
@@ -203,19 +211,21 @@ define
     {W show}
 
     % On cree la fenetre du haut (en blanc)
-    {Text1 tk(insert 'end' "Chargement... Veuillez patienter.")}
+    {Text1 tk(insert 'end' "Loading... Please wait.")}
     {Text1 bind(event:"<Control-s>" action:Press)} % You can also bind events
     
     % On cree le dictionnaire qui contient des données intéressantes
+    ReadingStream
+    ReadingPort = {NewPort ReadingStream}
+    
     % Ici il va falloir lancer les threads de lecture
     ReadFilesOver
-    ReadingStream
     %ReadingStream2
     %ReadingStream3
     Time1 = {Time.time}
-    thread ReadingStream = {ReadFiles 1 208 1 100} end
-    %thread ReadingStream2 = {ReadFiles 71 140 1 100} end
-    %thread ReadingStream3 = {ReadFiles 141 208 1 100} end
+    thread {ReadFiles ReadingPort 1 5 1 100} end
+    %thread ReadingStream2 = {ReadFiles ReadingPort 71 140 1 100} end
+    %thread ReadingStream3 = {ReadFiles ReadingPort 141 208 1 100} end
     %{Wait ReadFilesOver}
     %Time2 = {Time.time}
     %{Show Time2-Time1}
@@ -241,6 +251,6 @@ define
     {Show Time4-Time1}
     
     % C'est parti !
-    {Text1 set(1:"Chargement terminé ! Effacez ce texte et écrivez le vôtre à la place.")} % you can get/set text this way too   
+    {Text1 set(1:"Loading ended! Chargement terminé ! Effacez ce texte et écrivez le vôtre à la place.")} % you can get/set text this way too   
 end
 
