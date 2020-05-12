@@ -9,42 +9,6 @@ import
    Reader
 
 define
-%%%%%% READER
-   %%% Retourne une liste de toutes les lignes du fichier
-    fun {ScanWhole File}
-       Line = {File getS($)}
-    in
-       if Line == false then
-	  {File close}
-	  nil
-       else
-	  Line|{ScanWhole File}
-       end
-    end
-
-    proc {NewReadFiles Port FromFile ToFile}
-       proc {ScanWhole File}
-	  Line = {File getS($)}
-       in
-	  if Line == false then
-	     {File close}
-	  else
-	     {Send Port Line}
-	     {ScanWhole File}
-	  end
-       end
-    in
-       {Show FromFile}
-       {ScanWhole {New Reader.textfile init(name:{PartNumber FromFile})}}
-       if FromFile < ToFile then
-	  {NewReadFiles Port FromFile+1 ToFile}
-       else
-	  {Send Port over}
-       end
-    end
-
-    % Line = {Reader.scan {New Reader.textfile init(name:IN_NAME)} LineNumber
-   
 %%% Easier macros for imported functions
    % Browse = Browser.browse
    Show = System.show
@@ -63,24 +27,7 @@ define
       else
 	 {Text2 set(1:PredictedWord)}
       end
-   end
-   
-%%% Renvoie la ligne numero LineNumber du fichier IN_NAME
-   fun {GetLineNb IN_NAME LineNumber}
-      Line in
-      Line = {Reader.scan {New Reader.textfile init(name:IN_NAME)} LineNumber}
-      if Line == none then
-	 nil
-      else
-	 Line
-      end
-   end
-
-%%% Retourne une liste de toutes les lignes du fichier FileName
-   %fun {GetFile FileName}
-   %   {ScanWhole {New TextFile init(name:FileName)}}
-   %end
-   
+   end   
 
 %%% Retourne la concatenation de "tweets/part_", de Number et de ".txt"
     fun {PartNumber Number}
@@ -138,31 +85,28 @@ define
        {Atom.toString @MaxOccur.1}
     end
 
-%%% Lit les fichiers du numéro FromFile au numéro ToFile
-%%% Lit les lignes de la ligne FromLine à la ligne ToLine
-%%% Et envoie les lignes, une à une, au port Port
-%%% Envoie over quand il a terminé
-    proc {ReadFiles Port FromFile ToFile FromLine ToLine}
-       proc {ReadIt CurrentFile CurrentLine}
-	  {Send Port {GetLineNb {PartNumber CurrentFile} CurrentLine}}
-	  if CurrentLine == ToLine then
-	     if CurrentFile == ToFile then
-		% {Show readfilesover}
-		{Send Port over}
-	     else
-		{Show CurrentFile}
-		{ReadIt CurrentFile+1 FromLine}
-	     end
+%%% Envoie vers le port Port toutes les lignes des fichiers
+%%% du fichier numéro FromFile au fichier numéro ToFile
+    proc {ReadFiles Port FromFile ToFile}
+       proc {ScanWhole File}
+	  Line = {File getS($)}
+       in
+	  if Line == false then
+	     {File close}
 	  else
-	     {ReadIt CurrentFile CurrentLine+1}
+	     {Send Port Line}
+	     {ScanWhole File}
 	  end
        end
     in
-       {ReadIt FromFile FromLine}
+       {ScanWhole {New Reader.textfile init(name:{PartNumber FromFile})}}
+       if FromFile < ToFile then
+	  {ReadFiles Port FromFile+1 ToFile}
+       else
+	  {Send Port over}
+       end
     end
-
-
-
+    
 %%% Retourne un stream de liste des mots, dans l'ordre, de la ligne Line, terminé par over
     fun {GetListOfWords Stream OverExpected}
        fun {GetWords Line CurrentWord}
@@ -223,10 +167,10 @@ define
     proc {LaunchReadingThreads N Upto}
        proc {Launch NthThread}
 	  if NthThread < N then
-	     thread {NewReadFiles ReadingPort 1+(NthThread-1)*Step Step*NthThread} end
+	     thread {ReadFiles ReadingPort 1+(NthThread-1)*Step Step*NthThread} end
 	     {Launch NthThread+1}
 	  else
-	     thread {NewReadFiles ReadingPort 1+(NthThread-1)*Step Upto} end
+	     thread {ReadFiles ReadingPort 1+(NthThread-1)*Step Upto} end
 	  end
        end
        Step
@@ -261,17 +205,23 @@ define
     NbReadingThreads = 1
     {LaunchReadingThreads NbReadingThreads 208}
 
+    % {Show Time2-Time1}
+    
     % On sépare les mots des listes
     SeparatingStream
     thread SeparatingStream = {GetListOfWords ReadingStream NbReadingThreads} end
 
+    % {Show Time3-Time2}
+    
     % On inscrit les mots et la frequence des mots qui les suivent dans un dictionnaire
     WordsDict = {Dictionary.new}
     Add2GramsOver
     thread {Add2GramsToDict WordsDict SeparatingStream} end
     {Wait Add2GramsOver}
     
-    Time4 = {Time.time}    
+    Time4 = {Time.time}
+    
+    {Show over}
     {Show Time4-Time1}
     
     % C'est parti !
