@@ -4,12 +4,12 @@ import
     System
     Application
     % OS
-    Browser
+    % Browser
 
     Reader
 define
 %%% Easier macros for imported functions
-    Browse = Browser.browse
+    % Browse = Browser.browse
     Show = System.show
 
 %%% Read File
@@ -68,27 +68,7 @@ define
 	  end
        end
     in
-       {GetThem {GetListOfWords Line|over|nil}.1}
-    end
-
-    fun {GetOld Line}
-       fun {GetThem Line AnteUltWord UltWord}
-	  case Line
-	  of nil then [AnteUltWord UltWord]
-	  [] Letter|T then
-	     if Letter \= 32 then
-		{GetThem T AnteUltWord {Append UltWord Letter|nil}}
-	     else
-		if T \= nil then
-		   {GetThem T UltWord nil}
-		else
-		   [AnteUltWord UltWord]
-		end
-	     end
-	  end
-       end
-    in
-       {GetThem Line nil nil}
+       {GetThem {RecurGetListOfWords Line|over|nil 1}.1 }
     end
        
 %%% Retourne le même string mais sans aucun "\n", sans espace final et sans double espace
@@ -126,17 +106,6 @@ define
        {Atom.toString @MaxOccur.1}
     end
 
-%%%%%% PARTIE OU LES FONCTIONS FONCTIONNENT AVEC DES STREAMS (THREADS) %%%%%
-%%% Browse un stream
-    proc {Disp S}
-       case S
-       of X|over then {Browse X}
-       [] X|S2 then
-	  {Browse X}
-	  {Disp S2}
-       end
-    end
-    
 %%% Lit les fichiers du numéro FromFile au numéro ToFile
 %%% Lit les lignes de la ligne FromLine à la ligne ToLine
 %%% Et ajoute les lignes, une à une, au port Port
@@ -162,53 +131,28 @@ define
     end
 
 %%% Retourne un stream de liste des mots, dans l'ordre, de la ligne Line, termine par over
-    fun {GetListOfWords Stream}
-       LineSineN ToReturn WordToAdd in
-       LineSineN = {Format Stream.1}
-       ToReturn = {NewCell nil}
-       WordToAdd = {NewCell nil}
-       for Letter in LineSineN do
-	  if Letter == 32 then % " "
-	     ToReturn := {Append @ToReturn @WordToAdd|nil}
-	     WordToAdd := nil
-	  elseif Letter == 46 orelse Letter == 59 orelse Letter == 33 orelse Letter == 63 then % ".", ";", "!", "?"
-	     skip
-	  elseif Letter == 146 orelse Letter == 222 then % fonctionne pas
-	     skip
-	  elseif 64 < Letter andthen Letter < 90 then % lettre majuscule
-	     WordToAdd := {Append @WordToAdd Letter+32|nil}
-	  else
-	     WordToAdd := {Append @WordToAdd Letter|nil}
-	  end
-       end
-       if Stream.2.1 == over then
-	  GetListOver = unit
-	  {Show getlistover}
-	  {Append @ToReturn @WordToAdd|nil}|over
-       else
-	  {Append @ToReturn @WordToAdd|nil}|{GetListOfWords Stream.2}
-       end
-    end
-
-    fun {RecurGetListOfWords Stream}
+    fun {RecurGetListOfWords Stream OverExpected}
        fun {GetWords Line CurrentWord}
 	  if Line == nil then CurrentWord|nil % fin de ligne
 	  elseif Line.1 == 32 then CurrentWord|{GetWords Line.2 nil} % espace
-	  elseif 64 < Line.1 andthen Line.1 < 90 then % lettre majuscule
+	  elseif 65 =< Line.1 andthen Line.1 =< 89 then % lettre majuscule
 	     {GetWords Line.2 {Append CurrentWord Line.1+32|nil}}
-	  elseif 89 < Line.1 andthen Line.1 < 123 then % lettre minuscule
+	  elseif 90 =< Line.1 andthen Line.1 =< 124 then % lettre minuscule
 	     {GetWords Line.2 {Append CurrentWord Line.1|nil}}
 	  else
 	     {GetWords Line.2 CurrentWord}
 	  end
        end
     in
-       if Stream.2.1 == over then
-	  GetListOver = unit
-	  {Show getlistover}
-	  {GetWords {Format Stream.1} nil}|over
+       if Stream.1 == over then
+	  if OverExpected == 1 then
+	     GetListOver = unit
+	     over
+	  else
+	     {RecurGetListOfWords Stream.2 OverExpected-1}
+	  end
        else
-	  {GetWords {Format Stream.1} nil}|{RecurGetListOfWords Stream.2}
+	  {GetWords {Format Stream.1} nil}|{RecurGetListOfWords Stream.2 OverExpected}
        end
     end	     
 
@@ -263,9 +207,16 @@ define
     %ReadingStream2
     %ReadingStream3
     Time1 = {Time.time}
-    thread {ReadFiles ReadingPort 1 20 1 100} end
-    %thread ReadingStream2 = {ReadFiles ReadingPort 71 140 1 100} end
-    %thread ReadingStream3 = {ReadFiles ReadingPort 141 208 1 100} end
+
+    NbReadingThreads = 8
+    thread {ReadFiles ReadingPort 1 26 1 100} end
+    thread {ReadFiles ReadingPort 27 52 1 100} end
+    thread {ReadFiles ReadingPort 53 78 1 100} end
+    thread {ReadFiles ReadingPort 79 104 1 100} end
+    thread {ReadFiles ReadingPort 105 130 1 100} end
+    thread {ReadFiles ReadingPort 131 156 1 100} end
+    thread {ReadFiles ReadingPort 157 182 1 100} end
+    thread {ReadFiles ReadingPort 183 208 1 100} end
     %{Wait ReadFilesOver}
     %Time2 = {Time.time}
     %{Show Time2-Time1}
@@ -273,7 +224,7 @@ define
     % Ici les threads de parsing (j'ai suppose que c'etait ca ahah)
     GetListOver
     SeparatingStream
-    thread SeparatingStream = {RecurGetListOfWords ReadingStream} end
+    thread SeparatingStream = {RecurGetListOfWords ReadingStream NbReadingThreads} end
     % thread {Disp SeparatingStream} end
     %{Wait GetListOver}
     %Time3 = {Time.time}
