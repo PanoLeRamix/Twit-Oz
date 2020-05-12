@@ -6,13 +6,30 @@ import
     % OS
     % Browser
 
-    Reader
+   Reader
+   
 define
 %%% Easier macros for imported functions
     % Browse = Browser.browse
-    Show = System.show
+   Show = System.show
 
-%%% Read File
+   proc {Press}
+      {Wait Add2GramsOver}
+
+      InsertedLine PredictedWord in
+      InsertedLine = {Text1 getText(p(1 0) 'end' $)}
+      PredictedWord = {FindMostFrequent2Gram WordsDict {GetLastTwoWords InsertedLine}}
+
+      if PredictedWord == "nil" then
+	 {Text2 set(1:"We couldn't find any prediction. Please try again with other words.")}
+      elseif PredictedWord == nil then
+	 {Text2 set(1:"Please write some text.")}
+      else
+	 {Text2 set(1:PredictedWord)}
+      end
+   end
+   
+%%% Renvoie la ligne numero LineNumber du fichier IN_NAME
    fun {GetLineNb IN_NAME LineNumber}
       Line in
       Line = {Reader.scan {New Reader.textfile init(name:IN_NAME)} LineNumber}
@@ -21,34 +38,6 @@ define
       else
 	 Line
       end
-    end
-
-%%% GUI
-    %% Make the window description, all the parameters are explained here:
-    %% http://mozart2.org/mozart-v1/doc-1.4.0/mozart-stdlib/wp/qtk/html/node7.html)
-    Text1 Text2 Description=td(
-        title: "Text predictor"
-        lr(
-            text(handle:Text1 width:35 height:10 background:white foreground:black wrap:word)
-            button(text:"Predict" action:Press)
-        )
-        text(handle:Text2 width:35 height:10 background:black foreground:white glue:w wrap:word)
-        action:proc{$}{Application.exit 0} end % quit app gracefully on window closing
-    )
-    proc {Press}
-       {Wait Add2GramsOver}
-       
-       InsertedLine PredictedWord in
-       InsertedLine = {Format {Text1 getText(p(1 0) 'end' $)}}
-       PredictedWord = {FindMostFrequent2Gram WordsDict {GetLastTwoWords InsertedLine}}
-       
-       if PredictedWord == "nil" then
-	  {Text2 set(1:"We couldn't find any prediction. Please try again with other words.")}
-       elseif PredictedWord == nil then
-	  {Text2 set(1:"Please write some text.")}
-       else
-	  {Text2 set(1:PredictedWord)} 
-       end
     end
 
 %%% Retourne la concatenation de "tweets/part_", de Number et de ".txt"
@@ -61,14 +50,15 @@ define
        fun {GetThem List}
 	  case List
 	  of nil then nil
-	  [] W|nil then [W nil]
+	  [] W|nil then [nil W]
+	  [] W|nil|_ then [nil W]
 	  [] W1|W2|nil then [W1 W2]
 	  else
 	     {GetThem List.2}
 	  end
        end
     in
-       {GetThem {RecurGetListOfWords Line|over|nil 1}.1 }
+       {GetThem {GetListOfWords Line|over|nil 1}.1}
     end
        
 %%% Retourne le même string mais sans aucun "\n", sans espace final et sans double espace
@@ -87,7 +77,7 @@ define
        end
     end
 
-%%% Retourne le mot le plus frequent apres la suite de mots Words, selon le dictionnaire Dict
+%%% Retourne le mot le plus frequent apres la suite de deux mots Words, selon le dictionnaire Dict
     fun {FindMostFrequent2Gram Dict Words}
        Word1 Word2 SubDict SubSubDict MaxOccur in
        Word1 = Words.1
@@ -108,15 +98,14 @@ define
 
 %%% Lit les fichiers du numéro FromFile au numéro ToFile
 %%% Lit les lignes de la ligne FromLine à la ligne ToLine
-%%% Et ajoute les lignes, une à une, au port Port
+%%% Et envoie les lignes, une à une, au port Port
 %%% Envoie over quand il a terminé
     proc {ReadFiles Port FromFile ToFile FromLine ToLine}
        proc {ReadIt CurrentFile CurrentLine}
 	  {Send Port {GetLineNb {PartNumber CurrentFile} CurrentLine}}
 	  if CurrentLine == ToLine then
 	     if CurrentFile == ToFile then
-		ReadFilesOver = unit
-		{Show readfilesover}
+		% {Show readfilesover}
 		{Send Port over}
 	     else
 		{Show CurrentFile}
@@ -130,8 +119,8 @@ define
        {ReadIt FromFile FromLine}
     end
 
-%%% Retourne un stream de liste des mots, dans l'ordre, de la ligne Line, termine par over
-    fun {RecurGetListOfWords Stream OverExpected}
+%%% Retourne un stream de liste des mots, dans l'ordre, de la ligne Line, terminé par over
+    fun {GetListOfWords Stream OverExpected}
        fun {GetWords Line CurrentWord}
 	  if Line == nil then CurrentWord|nil % fin de ligne
 	  elseif Line.1 == 32 then CurrentWord|{GetWords Line.2 nil} % espace
@@ -146,20 +135,19 @@ define
     in
        if Stream.1 == over then
 	  if OverExpected == 1 then
-	     GetListOver = unit
 	     over
 	  else
-	     {RecurGetListOfWords Stream.2 OverExpected-1}
+	     {GetListOfWords Stream.2 OverExpected-1}
 	  end
        else
-	  {GetWords {Format Stream.1} nil}|{RecurGetListOfWords Stream.2 OverExpected}
+	  {GetWords {Format Stream.1} nil}|{GetListOfWords Stream.2 OverExpected}
        end
     end	     
 
 %%% Ajoute au dictionnaire Dict des sous-dictionnaires de façon que Dict ressemble à :
 %%% {"je" : {"suis" : {grand : 4, petit : 3}, "mange" : {des : 1, une : 3}}, "tu" : {"es" : {grand : 2}}}
 %%% ce qui signifie que la suite de mots "je suis" est suivi 4 fois par le mot "grand", etc.
-%%% depuis le stream Stream
+%%% depuis le stream Stream, terminé par over
     proc {Add2GramsToDict Dict Stream}
        AnteUltWord UltWord SubDict SubSubDict GramCount in
        AnteUltWord = {NewCell nil} % premier mot du gram
@@ -181,67 +169,69 @@ define
        end
 
        if Stream.2 == over then
-	  {Show add2gramsover}
 	  Add2GramsOver = unit
        else
 	  {Add2GramsToDict Dict Stream.2}
        end
-    end 
-       
-%%% Et voici le code qui tourne
-    % Build the layout from the description
-    % jsp ce que c'est ahah
+    end
+
+%%% Lance les N threads de lecture
+    proc {LaunchReadingThreads N}
+       proc {Launch NthThread}
+	  if NthThread < N then
+	     thread {ReadFiles ReadingPort 1+(NthThread-1)*Step Step*NthThread 1 100} end
+	     {Launch NthThread+1}
+	  else
+	     thread {ReadFiles ReadingPort 1+(NthThread-1)*Step 208 1 100} end
+	  end
+       end
+       Step
+    in
+       Step = 208 div N
+       {Show Step}
+       {Launch 1}
+    end
+           
+%%% ICI SE TROUVE LE CODE QUI TOURNE
+    % Création de l'interface graphique
+    Text1 Text2
+    Description=td(
+	title: "Text predictor"
+	lr(text(handle:Text1 width:35 height:10 background:white foreground:black wrap:word) button(text:"Predict" action:Press))
+	text(handle:Text2 width:35 height:10 background:black foreground:white glue:w wrap:word)
+	action:proc{$}{Application.exit 0} end % quit app gracefully on window closing
+		   )
+
+    % Creation de la description ci-dessus
     W={QTk.build Description}
     {W show}
 
-    % On cree la fenetre du haut (en blanc)
+    %
     {Text1 tk(insert 'end' "Loading... Please wait.")}
     {Text1 bind(event:"<Control-s>" action:Press)} % You can also bind events
-    
-    % On cree le dictionnaire qui contient des données intéressantes
+
+    Time1 = {Time.time}
+    % Creation du port qui redirige vers le stream des lignes lues
     ReadingStream
     ReadingPort = {NewPort ReadingStream}
-    
-    % Ici il va falloir lancer les threads de lecture
-    ReadFilesOver
-    %ReadingStream2
-    %ReadingStream3
-    Time1 = {Time.time}
 
-    NbReadingThreads = 8
-    thread {ReadFiles ReadingPort 1 26 1 100} end
-    thread {ReadFiles ReadingPort 27 52 1 100} end
-    thread {ReadFiles ReadingPort 53 78 1 100} end
-    thread {ReadFiles ReadingPort 79 104 1 100} end
-    thread {ReadFiles ReadingPort 105 130 1 100} end
-    thread {ReadFiles ReadingPort 131 156 1 100} end
-    thread {ReadFiles ReadingPort 157 182 1 100} end
-    thread {ReadFiles ReadingPort 183 208 1 100} end
-    %{Wait ReadFilesOver}
-    %Time2 = {Time.time}
-    %{Show Time2-Time1}
-    
-    % Ici les threads de parsing (j'ai suppose que c'etait ca ahah)
-    GetListOver
+    NbReadingThreads = 12
+    {LaunchReadingThreads NbReadingThreads}
+
+    % On sépare les mots des listes
     SeparatingStream
-    thread SeparatingStream = {RecurGetListOfWords ReadingStream NbReadingThreads} end
-    % thread {Disp SeparatingStream} end
-    %{Wait GetListOver}
-    %Time3 = {Time.time}
-    %{Show Time3-Time2}
+    thread SeparatingStream = {GetListOfWords ReadingStream NbReadingThreads} end
 
-    % Et ici les threads d'écriture (guess que c'est ceux qui ecrivent dans le dico?)
+    % On inscrit les mots et la frequence des mots qui les suivent dans un dictionnaire
     WordsDict = {Dictionary.new}
     Add2GramsOver
     thread {Add2GramsToDict WordsDict SeparatingStream} end
     {Wait Add2GramsOver}
-    Time4 = {Time.time}
-    %{Show Time4-Time3}
     
-    {Show over}
+    Time4 = {Time.time}    
     {Show Time4-Time1}
     
     % C'est parti !
-    {Text1 set(1:"Loading ended! Delete this text and write your own instead.")} % you can get/set text this way too   
+    {Text1 set(1:"Loading ended! Delete this text and write your own instead.")}
 end
 
