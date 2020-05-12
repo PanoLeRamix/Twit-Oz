@@ -42,8 +42,10 @@ define
        InsertedLine = {Format {Text1 getText(p(1 0) 'end' $)}}
        PredictedWord = {FindMostFrequent2Gram WordsDict {GetLastTwoWords InsertedLine}}
        
-       if PredictedWord == nil then
+       if PredictedWord == "nil" then
 	  {Text2 set(1:"We couldn't find any prediction. Please try again with other words.")}
+       elseif PredictedWord == nil then
+	  {Text2 set(1:"Please write some text.")}
        else
 	  {Text2 set(1:PredictedWord)} 
        end
@@ -56,6 +58,20 @@ define
 
 %%% Retourne les deux derniers mots, sous forme de liste, de la ligne Line
     fun {GetLastTwoWords Line}
+       fun {GetThem List}
+	  case List
+	  of nil then nil
+	  [] W|nil then [W nil]
+	  [] W1|W2|nil then [W1 W2]
+	  else
+	     {GetThem List.2}
+	  end
+       end
+    in
+       {GetThem {GetListOfWords Line|over|nil}.1}
+    end
+
+    fun {GetOld Line}
        fun {GetThem Line AnteUltWord UltWord}
 	  case Line
 	  of nil then [AnteUltWord UltWord]
@@ -75,15 +91,17 @@ define
        {GetThem Line nil nil}
     end
        
-%%% Retourne le même string mais sans aucun "\n" et sans double espace
+%%% Retourne le même string mais sans aucun "\n", sans espace final et sans double espace
     fun {Format String}
        case String
        of nil then
-	  String
+	  nil
        [] 10|T then
 	  {Format T}
        [] 32|32|T then
 	  {Format 32|T}
+       [] 32|nil then
+	  nil
        else
 	  String.1|{Format String.2}
        end
@@ -172,6 +190,28 @@ define
        end
     end
 
+    fun {RecurGetListOfWords Stream}
+       fun {GetWords Line CurrentWord}
+	  if Line == nil then CurrentWord|nil % fin de ligne
+	  elseif Line.1 == 32 then CurrentWord|{GetWords Line.2 nil} % espace
+	  elseif 64 < Line.1 andthen Line.1 < 90 then % lettre majuscule
+	     {GetWords Line.2 {Append CurrentWord Line.1+32|nil}}
+	  elseif 89 < Line.1 andthen Line.1 < 123 then % lettre minuscule
+	     {GetWords Line.2 {Append CurrentWord Line.1|nil}}
+	  else
+	     {GetWords Line.2 CurrentWord}
+	  end
+       end
+    in
+       if Stream.2.1 == over then
+	  GetListOver = unit
+	  {Show getlistover}
+	  {GetWords {Format Stream.1} nil}|over
+       else
+	  {GetWords {Format Stream.1} nil}|{RecurGetListOfWords Stream.2}
+       end
+    end	     
+
 %%% Ajoute au dictionnaire Dict des sous-dictionnaires de façon que Dict ressemble à :
 %%% {"je" : {"suis" : {grand : 4, petit : 3}, "mange" : {des : 1, une : 3}}, "tu" : {"es" : {grand : 2}}}
 %%% ce qui signifie que la suite de mots "je suis" est suivi 4 fois par le mot "grand", etc.
@@ -223,7 +263,7 @@ define
     %ReadingStream2
     %ReadingStream3
     Time1 = {Time.time}
-    thread {ReadFiles ReadingPort 1 5 1 100} end
+    thread {ReadFiles ReadingPort 1 20 1 100} end
     %thread ReadingStream2 = {ReadFiles ReadingPort 71 140 1 100} end
     %thread ReadingStream3 = {ReadFiles ReadingPort 141 208 1 100} end
     %{Wait ReadFilesOver}
@@ -233,7 +273,7 @@ define
     % Ici les threads de parsing (j'ai suppose que c'etait ca ahah)
     GetListOver
     SeparatingStream
-    thread SeparatingStream = {GetListOfWords ReadingStream} end
+    thread SeparatingStream = {RecurGetListOfWords ReadingStream} end
     % thread {Disp SeparatingStream} end
     %{Wait GetListOver}
     %Time3 = {Time.time}
@@ -251,6 +291,6 @@ define
     {Show Time4-Time1}
     
     % C'est parti !
-    {Text1 set(1:"Loading ended! Chargement terminé ! Effacez ce texte et écrivez le vôtre à la place.")} % you can get/set text this way too   
+    {Text1 set(1:"Loading ended! Delete this text and write your own instead.")} % you can get/set text this way too   
 end
 
