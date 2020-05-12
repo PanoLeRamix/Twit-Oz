@@ -1,23 +1,59 @@
 functor
 import
-    QTk at 'x-oz://system/wp/QTk.ozf'
-    System
-    Application
+   QTk at 'x-oz://system/wp/QTk.ozf'
+   System
+   Application
     % OS
     % Browser
 
    Reader
-   
+
 define
+%%%%%% READER
+   %%% Retourne une liste de toutes les lignes du fichier
+    fun {ScanWhole File}
+       Line = {File getS($)}
+    in
+       if Line == false then
+	  {File close}
+	  nil
+       else
+	  Line|{ScanWhole File}
+       end
+    end
+
+    proc {NewReadFiles Port FromFile ToFile}
+       proc {ScanWhole File}
+	  Line = {File getS($)}
+       in
+	  if Line == false then
+	     {File close}
+	  else
+	     {Send Port Line}
+	     {ScanWhole File}
+	  end
+       end
+    in
+       {Show FromFile}
+       {ScanWhole {New Reader.textfile init(name:{PartNumber FromFile})}}
+       if FromFile < ToFile then
+	  {NewReadFiles Port FromFile+1 ToFile}
+       else
+	  {Send Port over}
+       end
+    end
+
+    % Line = {Reader.scan {New Reader.textfile init(name:IN_NAME)} LineNumber
+   
 %%% Easier macros for imported functions
-    % Browse = Browser.browse
+   % Browse = Browser.browse
    Show = System.show
 
    proc {Press}
       {Wait Add2GramsOver}
 
       InsertedLine PredictedWord in
-      InsertedLine = {Text1 getText(p(1 0) 'end' $)}
+      InsertedLine = {Format {Text1 getText(p(1 0) 'end' $)}}
       PredictedWord = {FindMostFrequent2Gram WordsDict {GetLastTwoWords InsertedLine}}
 
       if PredictedWord == "nil" then
@@ -38,7 +74,13 @@ define
       else
 	 Line
       end
-    end
+   end
+
+%%% Retourne une liste de toutes les lignes du fichier FileName
+   %fun {GetFile FileName}
+   %   {ScanWhole {New TextFile init(name:FileName)}}
+   %end
+   
 
 %%% Retourne la concatenation de "tweets/part_", de Number et de ".txt"
     fun {PartNumber Number}
@@ -119,6 +161,8 @@ define
        {ReadIt FromFile FromLine}
     end
 
+
+
 %%% Retourne un stream de liste des mots, dans l'ordre, de la ligne Line, terminé par over
     fun {GetListOfWords Stream OverExpected}
        fun {GetWords Line CurrentWord}
@@ -175,20 +219,19 @@ define
        end
     end
 
-%%% Lance les N threads de lecture
-    proc {LaunchReadingThreads N}
+%%% Lance les N threads de lecture, qui liront tous les fichiers jusqu'au fichier numéro Upto
+    proc {LaunchReadingThreads N Upto}
        proc {Launch NthThread}
 	  if NthThread < N then
-	     thread {ReadFiles ReadingPort 1+(NthThread-1)*Step Step*NthThread 1 100} end
+	     thread {NewReadFiles ReadingPort 1+(NthThread-1)*Step Step*NthThread} end
 	     {Launch NthThread+1}
 	  else
-	     thread {ReadFiles ReadingPort 1+(NthThread-1)*Step 208 1 100} end
+	     thread {NewReadFiles ReadingPort 1+(NthThread-1)*Step Upto} end
 	  end
        end
        Step
     in
-       Step = 208 div N
-       {Show Step}
+       Step = Upto div N
        {Launch 1}
     end
            
@@ -215,8 +258,8 @@ define
     ReadingStream
     ReadingPort = {NewPort ReadingStream}
 
-    NbReadingThreads = 12
-    {LaunchReadingThreads NbReadingThreads}
+    NbReadingThreads = 1
+    {LaunchReadingThreads NbReadingThreads 208}
 
     % On sépare les mots des listes
     SeparatingStream
