@@ -4,15 +4,15 @@ import
    System
    Application
     % OS
-    % Browser
 
    Reader
 
 define
 %%% Easier macros for imported functions
-   % Browse = Browser.browse
    Show = System.show
 
+%%% Procedure qui se declenche lorsqu'on appuie sur le bouton
+%%% Affiche la prediction du prochain mot selon les deux derniers mots entres
    proc {Press}
       {Wait Add2GramsOver}
 
@@ -20,10 +20,8 @@ define
       InsertedLine = {Format {Text1 getText(p(1 0) 'end' $)}}
       PredictedWord = {FindMostFrequent2Gram WordsDict {GetLastTwoWords InsertedLine}}
 
-      if PredictedWord == "nil" then
+      if PredictedWord == "nil" orelse PredictedWord == nil then
 	 {Text2 set(1:"We couldn't find any prediction. Please try again with other words.")}
-      elseif PredictedWord == nil then
-	 {Text2 set(1:"Please write some text.")}
       else
 	 {Text2 set(1:PredictedWord)}
       end
