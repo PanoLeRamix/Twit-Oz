@@ -2,6 +2,5 @@
 Twit-Oz
 
 ## À faire:
-* Relire la fonction de lecture d'un fichier
-* Finir l'implémentation des threads
+* Améliorer les performances, si possible
 * Trouver une solution pour les guillemets et les apostrophes

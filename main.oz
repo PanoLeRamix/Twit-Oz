@@ -46,8 +46,11 @@ define
 	     {GetThem List.2}
 	  end
        end
+       GetStream
+       GetPort = {NewPort GetStream}
     in
-       {GetThem {GetListOfWords Line|over|nil 1}.1}
+       {GetListOfWords GetPort Line|over|nil}
+       {GetThem GetStream.1}
     end
        
 %%% Retourne le même string mais sans aucun "\n", sans espace final et sans double espace
@@ -107,8 +110,8 @@ define
        end
     end
     
-%%% Retourne un stream de liste des mots, dans l'ordre, de la ligne Line, terminé par over
-    fun {GetListOfWords Stream OverExpected}
+%%% Envoie vers le port Port des listes des mots, dans l'ordre, des lignes du stream Stream, et finalement envoie over
+    proc {GetListOfWords Port Stream}
        fun {GetWords Line CurrentWord}
 	  if Line == nil then CurrentWord|nil % fin de ligne
 	  elseif Line.1 == 32 then CurrentWord|{GetWords Line.2 nil} % espace
@@ -122,13 +125,10 @@ define
        end
     in
        if Stream.1 == over then
-	  if OverExpected == 1 then
-	     over
-	  else
-	     {GetListOfWords Stream.2 OverExpected-1}
-	  end
+	  {Send Port over}
        else
-	  {GetWords {Format Stream.1} nil}|{GetListOfWords Stream.2 OverExpected}
+	  {Send Port {GetWords {Format Stream.1} nil}}
+	  {GetListOfWords Port Stream.2}
        end
     end	     
 
@@ -136,41 +136,53 @@ define
 %%% {"je" : {"suis" : {grand : 4, petit : 3}, "mange" : {des : 1, une : 3}}, "tu" : {"es" : {grand : 2}}}
 %%% ce qui signifie que la suite de mots "je suis" est suivi 4 fois par le mot "grand", etc.
 %%% depuis le stream Stream, terminé par over
-    proc {Add2GramsToDict Dict Stream}
-       AnteUltWord UltWord SubDict SubSubDict GramCount in
-       AnteUltWord = {NewCell nil} % premier mot du gram
-       UltWord = {NewCell nil} % deuxieme mot du gram
-       SubDict = {NewCell nil} % sous-dictionnaire de chaque mot
-       SubSubDict = {NewCell nil}
-       GramCount = {NewCell nil} % combien de fois le gram existe
+    proc {AddToDict Dict Stream OverExpected}
+       proc {Add Line AnteUltWord UltWord}
+	  Word = Line.1
+	  SubDict = {Dictionary.condGet Dict {String.toAtom AnteUltWord} {Dictionary.new}}
+	  SubSubDict = {Dictionary.condGet SubDict {String.toAtom UltWord} {Dictionary.new}}
+	  GramCount = {Dictionary.condGet SubSubDict {String.toAtom Word} 0}
+       in
+	  {Dictionary.put SubSubDict {String.toAtom Word} GramCount+1}
+	  {Dictionary.put SubDict {String.toAtom UltWord} SubSubDict}
+	  {Dictionary.put Dict {String.toAtom AnteUltWord} SubDict}
 
-       for Word in Stream.1 do % troisieme mot du gram
-	  SubDict := {Dictionary.condGet Dict {String.toAtom @AnteUltWord} {Dictionary.new}}
-	  SubSubDict := {Dictionary.condGet @SubDict {String.toAtom @UltWord} {Dictionary.new}}
-	  GramCount := {Dictionary.condGet @SubSubDict {String.toAtom Word} 0}
-	  {Dictionary.put @SubSubDict {String.toAtom Word} @GramCount+1}
-	  {Dictionary.put @SubDict {String.toAtom @UltWord} @SubSubDict}
-	  {Dictionary.put Dict {String.toAtom @AnteUltWord} @SubDict}
-
-	  AnteUltWord := @UltWord
-	  UltWord := Word
+	  case Line
+	  of _|nil then
+	     skip
+	  [] W1|W2|T then
+	     {Add W2|T UltWord W1}
+	  end
        end
-
-       if Stream.2 == over then
-	  Add2GramsOver = unit
+    in
+       case Stream
+       of over|_ then
+	  if OverExpected == 1 then
+	     Add2GramsOver = unit
+	  else
+	     {AddToDict Dict Stream.2 OverExpected-1}
+	  end
        else
-	  {Add2GramsToDict Dict Stream.2}
+	  thread {Add Stream.1 nil nil} end
+	  {AddToDict Dict Stream.2 OverExpected}
        end
     end
 
-%%% Lance les N threads de lecture, qui liront tous les fichiers jusqu'au fichier numéro Upto
-    proc {LaunchReadingThreads N Upto}
+%%% Lance les N threads de lecture et de parsing,
+%%%	qui liront et traiteront tous les fichiers jusqu'au fichier numero Upto
+%%% Les threads de parsing envoie leur resultat au port SeparatingPort
+    proc {LaunchThreads SeparatingPort N Upto}
        proc {Launch NthThread}
+	  ReadingStream
+	  ReadingPort = {NewPort ReadingStream}
+       in
 	  if NthThread < N then
 	     thread {ReadFiles ReadingPort 1+(NthThread-1)*Step Step*NthThread} end
+	     thread {GetListOfWords SeparatingPort ReadingStream} end
 	     {Launch NthThread+1}
 	  else
 	     thread {ReadFiles ReadingPort 1+(NthThread-1)*Step Upto} end
+	     thread {GetListOfWords SeparatingPort ReadingStream} end
 	  end
        end
        Step
@@ -198,31 +210,21 @@ define
     {Text1 bind(event:"<Control-s>" action:Press)} % You can also bind events
 
     Time1 = {Time.time}
-    % Creation du port qui redirige vers le stream des lignes lues
-    ReadingStream
-    ReadingPort = {NewPort ReadingStream}
-
-    NbReadingThreads = 1
-    {LaunchReadingThreads NbReadingThreads 208}
-
-    % {Show Time2-Time1}
     
-    % On sépare les mots des listes
-    SeparatingStream
-    thread SeparatingStream = {GetListOfWords ReadingStream NbReadingThreads} end
+    SeparatedWordsStream
+    SeparatedWordsPort = {NewPort SeparatedWordsStream}
 
-    % {Show Time3-Time2}
+    NbThreads = 12
+    {LaunchThreads SeparatedWordsPort NbThreads 208}
     
     % On inscrit les mots et la frequence des mots qui les suivent dans un dictionnaire
     WordsDict = {Dictionary.new}
     Add2GramsOver
-    thread {Add2GramsToDict WordsDict SeparatingStream} end
+    thread {AddToDict WordsDict SeparatedWordsStream NbThreads} end
     {Wait Add2GramsOver}
     
-    Time4 = {Time.time}
-    
-    {Show over}
-    {Show Time4-Time1}
+    Time2 = {Time.time}
+    {Show Time2-Time1}
     
     % C'est parti !
     {Text1 set(1:"Loading ended! Delete this text and write your own instead.")}
