@@ -221,7 +221,7 @@ define
     SeparatedWordsStream
     SeparatedWordsPort = {NewPort SeparatedWordsStream}
 
-    NbThreads = 12
+    NbThreads = 4
     {LaunchThreads SeparatedWordsPort NbThreads 208}
     
     % On inscrit les mots et la frequence des mots qui les suivent dans un dictionnaire
