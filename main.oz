@@ -3,15 +3,18 @@ import
    QTk at 'x-oz://system/wp/QTk.ozf'
    System
    Application
-    % OS
-
-   Reader
+   Open
 
 define
+%%% Pour ouvrir les fichiers (voir fonction ReadFiles)
+   class TextFile % This class enables line-by-line reading
+        from Open.file Open.text
+   end
+   
 %%% Easier macros for imported functions
    Show = System.show
 
-%%% Procedure qui se declenche lorsqu'on appuie sur le bouton
+%%% Procedure qui se declenche lorsqu'on appuie sur le bouton de prediction
 %%% Affiche la prediction du prochain mot selon les deux derniers mots entres
    proc {Press}
       {Wait Add2GramsOver}
@@ -25,7 +28,9 @@ define
       else
 	 {Text2 set(1:PredictedWord)}
       end
-   end   
+   end
+
+%%%%% FONCTIONS ANNEXES %%%%%
 
 %%% Retourne la concatenation de "tweets/part_", de Number et de ".txt"
     fun {PartNumber Number}
@@ -50,7 +55,7 @@ define
        {GetListOfWords GetPort Line|over|nil}
        {GetThem GetStream.1}
     end
-       
+
 %%% Retourne le même string mais sans aucun "\n", sans espace final et sans double espace
     fun {Format String}
        case String
@@ -86,6 +91,8 @@ define
        {Atom.toString @MaxOccur.1}
     end
 
+%%%%% FONCTIONS APPELEES PAR LE PROGRAMME %%%%%
+    
 %%% Envoie vers le port Port toutes les lignes des fichiers
 %%% du fichier numéro FromFile au fichier numéro ToFile
     proc {ReadFiles Port FromFile ToFile}
@@ -100,7 +107,8 @@ define
 	  end
        end
     in
-       {ScanWhole {New Reader.textfile init(name:{PartNumber FromFile})}}
+       {ScanWhole {New TextFile init(name:{PartNumber FromFile})}}
+       % {Show FromFile}
        if FromFile < ToFile then
 	  {ReadFiles Port FromFile+1 ToFile}
        else
@@ -208,7 +216,8 @@ define
     {Text1 bind(event:"<Control-s>" action:Press)} % You can also bind events
 
     Time1 = {Time.time}
-    
+
+    % On lance les threads de lecture et de parsing
     SeparatedWordsStream
     SeparatedWordsPort = {NewPort SeparatedWordsStream}
 
@@ -220,9 +229,11 @@ define
     Add2GramsOver
     thread {AddToDict WordsDict SeparatedWordsStream NbThreads} end
     {Wait Add2GramsOver}
-    
+
     Time2 = {Time.time}
+    {Show lasted}
     {Show Time2-Time1}
+    {Show seconds}
     
     % C'est parti !
     {Text1 set(1:"Loading ended! Delete this text and write your own instead.")}
