@@ -20,7 +20,7 @@ make
 ## Utilisation
 * Lancez le programme en écrivant ceci.
 ```bash
-ozengine main.oz
+ozengine main.oza
 ```
 
 * Patientez un instant. (sur un ordinateur performant, le chargement devrait durer tout au plus quelques secondes)
