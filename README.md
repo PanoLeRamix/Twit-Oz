@@ -1,6 +1,6 @@
 # Projet Twit-Oz – Groupe T
 L'objectif de ce programme est de prédire, lors de l'écriture d'un texte, le mot suivant, à-partir des mots précédents, moyennant l'analyse d'une base de données de fichiers texte.
-En l'occurrence, la base de données sont 208 fichiers contenant chacun jusqu'à 100 tweets de Donald Trump.
+En l'occurrence, la base de données est constituée de 208 fichiers contenant chacun jusqu'à 100 tweets de Donald Trump.
 
 ## Installation
 
